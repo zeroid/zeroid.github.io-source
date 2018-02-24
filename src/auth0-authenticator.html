@@ -1,0 +1,219 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/neon-animation/web-animations.html"><!-- need to bower install web-animations-js -->
+<link rel="import" href="../bower_components/neon-animation//animations/scale-up-animation.html">
+<link rel="import" href="../bower_components/neon-animation//animations/fade-out-animation.html">
+<link rel="import" href="shared-styles.html">
+<link rel="import" href="auth0-import.html">
+<dom-module id="auth0-authenticator">    
+    <template>
+        <style include="shared-styles">
+            :host {
+                margin: 0;
+                padding: 0;
+            }
+
+            #loginButton {
+                color: #fff;
+            }
+
+            #loginButton.link {
+                color: #fff;
+                display: inline-block;
+                font-size: 13px;
+            }
+
+            #loginButton.indigo {
+                background-color: var(--paper-indigo-500);
+                color: white;
+                --paper-button-raised-keyboard-focus: {
+                    background-color: var(--paper-pink-a200) !important;
+                    color: white !important;
+                  };
+            }
+
+            #loginButton.indigo:hover {
+                background-color: var(--paper-indigo-400);
+            }       
+
+            #gravitar {
+                height: 48px;
+                width: 48px;
+                --iron-icon: {
+                    border-radius: 50%;
+                    overflow: hidden;
+                }
+            }     
+
+            paper-dialog .buttons {
+                background: #f5f5f5;
+                border-top: 1px solid #ccc;                
+            }
+
+            paper-dialog paper-button {
+                color: white;
+                background-color: var(--app-primary-color);
+            }
+        </style>
+        <paper-button id="loginButton" class="link" hidden$="{{isAuthenticated}}">Sign in</paper-button>
+        <paper-icon-button id="gravitar" hidden$="{{!isAuthenticated}}"></paper-icon-button>
+        <paper-dialog id="userProfile" entry-animation="scale-up-animation" exit-animation="fade-out-animation">
+            <img id="image"/>
+            <h3 id="name"></h3>
+            <p id="email"></p>
+            <div class="buttons">
+                <paper-button id="logoutButton" dialog-confirm raised>Sign out</paper-button>                
+            </div>
+        </paper-dialog>
+    </template>
+    <script>
+    class Auth0Authenticator extends Polymer.Element {
+        static get is() { return 'auth0-authenticator'; }
+        static get properties() {
+            return {
+                domain: {
+                    type: String
+                },
+                clientId: {
+                    type: String
+                },
+                isAuthenticated: {
+                    type: Boolean,
+                    value: this._isAuthenticated,
+                    observer: "_getProfile",
+                    notify: true
+                },                
+                userProfile: {
+                    type: Object,
+                    observer: "_displayProfile",
+                    notify: true
+                },
+                _webAuth: {
+                    type: Object
+                },
+            };
+        }        
+
+        static get observers() {
+            return [
+                "_createWebAuth(domain,clientId)"
+            ];
+        }
+
+        _createWebAuth(domain, clientId) {
+            if (domain && clientId) {
+                this._webAuth = new auth0.WebAuth({
+                    domain: this.domain,
+                    clientID: this.clientId,
+                    responseType: 'token id_token',
+                    audience: 'https://zeroid.auth0.com/userinfo',
+                    scope: 'openid profile',
+                    redirectUri: window.location.href
+                });
+            }
+        }
+
+        ready() {
+            super.ready();
+
+            //this._webAuth = new auth0.WebAuth({
+            //    domain: this.domain,
+            //    clientID: this.clientId,
+            //    responseType: 'token id_token',
+            //    audience: 'https://zeroid.auth0.com/userinfo',
+            //    scope: 'openid profile',
+            //    redirectUri: window.location.href
+            //});
+
+            this.$.loginButton.addEventListener('click', function (e) {
+                e.preventDefault();
+                this._webAuth.authorize();
+            }.bind(this));
+
+            this.$.gravitar.addEventListener('click', function (e) {
+                e.preventDefault();
+                this.$.userProfile.toggle();
+            }.bind(this));
+
+            this.$.logoutButton.addEventListener('click', function (e) {
+                e.preventDefault();
+                this.logout.bind(this)();
+            }.bind(this));
+
+            this._handleAuthentication();            
+        }
+
+        logout() {
+            // Remove tokens and expiry time from localStorage
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('id_token');
+            localStorage.removeItem('expires_at');
+            this.isAuthenticated = this._isAuthenticated();
+        }
+
+        _isAuthenticated() {
+            if (!localStorage.getItem('expires_at'))
+                return false;
+
+            // Check whether the current time is past the
+            // Access Token's expiry time
+            var expiresAt = JSON.parse(localStorage.getItem('expires_at'));
+            return new Date().getTime() < expiresAt;
+        }
+
+        _setSession(authResult) {
+            // Set the time that the Access Token will expire at
+            var expiresAt = JSON.stringify(
+                authResult.expiresIn * 1000 + new Date().getTime()
+            );
+            localStorage.setItem('access_token', authResult.accessToken);
+            localStorage.setItem('id_token', authResult.idToken);
+            localStorage.setItem('expires_at', expiresAt);
+        }
+
+        _getProfile() {
+            if (!this.userProfile) {
+                var accessToken = localStorage.getItem('access_token');
+
+                if (!accessToken) {
+                    console.log('Access Token must exist to fetch profile');
+                    return;
+                }
+
+                this._webAuth.client.userInfo(accessToken, function (err, profile) {
+                    if (profile) {
+                        this.userProfile = profile;                        
+                    }
+                }.bind(this));
+            }
+        }
+
+        _displayProfile(userProfile) {
+            // display the profile
+            this.$.name.innerHTML = userProfile.name;
+            this.$.email.innerHTML = userProfile.nickname;
+            this.$.gravitar.src = 
+            this.$.image.src = userProfile.picture;
+        }
+
+        _handleAuthentication() {
+            this._webAuth.parseHash(function (err, authResult) {
+                if (authResult && authResult.accessToken && authResult.idToken) {
+                    window.location.hash = '';
+                    this._setSession(authResult);
+                } else if (err) {
+                    console.log(err);
+                    alert(
+                        'Error: ' + err.error + '. Check the console for further details.'
+                    );
+                }
+                this.isAuthenticated = this._isAuthenticated();
+            }.bind(this));
+        }          
+    }
+
+    window.customElements.define(Auth0Authenticator.is, Auth0Authenticator);
+    </script>
+</dom-module>
