@@ -36,15 +36,35 @@
 
             #loginButton.indigo:hover {
                 background-color: var(--paper-indigo-400);
-            }            
+            }       
+
+            #gravitar {
+                height: 48px;
+                width: 48px;
+                --iron-icon: {
+                    border-radius: 50%;
+                    overflow: hidden;
+                }
+            }     
+
+            paper-dialog .buttons {
+                background: #f5f5f5;
+                border-top: 1px solid #ccc;                
+            }
+
+            paper-dialog paper-button {
+                color: white;
+                background-color: var(--app-primary-color);
+            }
         </style>
         <paper-button id="loginButton" class="link" hidden$="{{isAuthenticated}}">Sign in</paper-button>
         <paper-icon-button id="gravitar" hidden$="{{!isAuthenticated}}"></paper-icon-button>
         <paper-dialog id="userProfile" entry-animation="scale-up-animation" exit-animation="fade-out-animation">
-            <span id="username"></span>
+            <img id="image"/>
+            <h3 id="name"></h3>
+            <p id="email"></p>
             <div class="buttons">
-                <paper-button id="logoutButton" dialog-confirm>Sign out</paper-button>
-                <paper-button dialog-dismiss auto-focus>Close</paper-button>
+                <paper-button id="logoutButton" dialog-confirm raised>Sign out</paper-button>                
             </div>
         </paper-dialog>
     </template>
@@ -172,8 +192,10 @@
 
         _displayProfile(userProfile) {
             // display the profile
-            this.$.username.innerHTML = userProfile.nickname;
-            this.$.gravitar.src = userProfile.picture;
+            this.$.name.innerHTML = userProfile.name;
+            this.$.email.innerHTML = userProfile.nickname;
+            this.$.gravitar.src = 
+            this.$.image.src = userProfile.picture;
         }
 
         _handleAuthentication() {
